@@ -1,0 +1,6 @@
+{
+  "batch_id": "synd-receipt-p1",
+  "events": [
+    {"event_id": "receipt-1", "rev": 1, "op": "upsert", "kind": "receipt", "period": 1, "amount": 50}
+  ]
+}

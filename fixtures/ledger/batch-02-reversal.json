@@ -1,0 +1,6 @@
+{
+  "batch_id": "synd-reversal-p2",
+  "events": [
+    {"event_id": "reversal-1", "rev": 1, "op": "upsert", "kind": "reversal", "period": 2, "target": "receipt-1"}
+  ]
+}

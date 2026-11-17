@@ -5,6 +5,13 @@ import hashlib, json, os, tempfile
 def require(obj,keys):
     if not isinstance(obj,dict) or set(obj)!=set(keys.split()):raise ValueError('expected object fields: '+keys)
 
+def only(obj,keys):
+    """Reject any field outside the declared contract and return the object."""
+    if not isinstance(obj,dict):raise ValueError('expected JSON object')
+    unknown=set(obj)-set(keys.split())
+    if unknown:raise ValueError('unknown field: '+sorted(unknown)[0])
+    return obj
+
 def ident(v):
     if not isinstance(v,str) or not v or v!=v.strip() or len(v)>128 or any(ord(c)<32 for c in v):
         raise ValueError('expected nonblank identifier, <=128 characters')

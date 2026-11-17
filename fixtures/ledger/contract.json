@@ -1,0 +1,6 @@
+{
+  "principal": 100,
+  "periods": 3,
+  "rate_numerator": 1,
+  "rate_denominator": 10
+}
