@@ -77,4 +77,20 @@ principal为1..10^12整数货币最小单位，periods=1..10000且不得超过�
 - 发布前在引擎与 SQLite 两侧校验资金恒等式、贷款本金/回收守恒、证券滚动与清仓归零，并提供 `v_*_conservation` / `v_tranche_rollforward` 复核视图。临时库通过全部检查并关闭后才 `os.replace` 原子发布；任何失败退出 2 且旧库字节不变。
 - 全程整数与 `Fraction` 精确运算，无浮点；金额为整数最小货币单位且满足有符号 64 位范围。有序 SQL 查询复跑一致，不要求数据库文件字节一致。
 
-不提供金融建议、利率合法性认证或真实放款。合成输入。
+## 采购标段授予数据集（contract-award）
+
+在采购批次上按“资质 + 容量”做可审计的标段授予，输出逐标段分配、每个候选报价的资格状态与未授标原因：
+
+```sh
+.venv/bin/contract-award --source fixtures/award/procurement.json --output run/awards.json
+# 或
+.venv/bin/loan-schedule contract-award --source fixtures/award/procurement.json --output run/awards.json
+```
+
+- 输入 `{procurement_id,lots,suppliers,bids}`：≤200 个不可拆分标段、≤100 个供应商（含 `capacity` 与 `certificates`）、≤5000 份逐标段报价（`amount` 1..10^12）。沿用既有 `ident` 规则与受限 JSON 读取器（≤8MB、拒绝重复键/非有限数/布尔冒充整数/未知或缺失字段/悬空引用/重复证书与 `(supplier,lot)`）。
+- 只有供应商证书覆盖该标段全部必需证书的报价才可参与；不合格报价仍保留并列出 `missing_certificates`，但不参与授标。每标段至多一个供应商、每供应商中标数不超过 `capacity`。
+- 三级目标：先最大化授标标段数，再最小化中标总价，最后取 `(lot_id,supplier_id,bid_id)` 排序序列字典序最小方案；同价必须可复现，结果不依赖输入行序。
+- 输出 `schema_version:1`，含 `source_sha256`、目标摘要、逐 lot（全部候选、资格、是否中标、中标 ID 或 `no_bid`/`no_qualified_bid`/`capacity_competition` 原因）与逐 supplier（capacity、获配 lot、剩余容量）汇总；键排序、复跑字节一致，写前做结果自校验并原子替换，失败退出 2 且保留旧输出。
+- `tests/test_award.py` 用独立穷举 oracle 核对小规模最优解，并覆盖资质阻断、容量全局冲突、标段唯一、同价破同分与乱序稳定。
+
+不提供金融建议或授标合规认证；样例均为原创合成数据。

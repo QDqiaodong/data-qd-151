@@ -1,0 +1,31 @@
+{
+  "procurement_id": "PROC-2026-001",
+  "lots": [
+    {"lot_id": "LOT-A", "required_certificates": ["ISO9001", "SECRET"]},
+    {"lot_id": "LOT-B", "required_certificates": ["ISO9001"]},
+    {"lot_id": "LOT-C", "required_certificates": []},
+    {"lot_id": "LOT-D", "required_certificates": ["ISO9001"]},
+    {"lot_id": "LOT-E", "required_certificates": ["ISO9001"]},
+    {"lot_id": "LOT-F", "required_certificates": ["ISO9001"]},
+    {"lot_id": "LOT-G", "required_certificates": []}
+  ],
+  "suppliers": [
+    {"supplier_id": "SUP-1", "capacity": 1, "certificates": ["ISO9001"]},
+    {"supplier_id": "SUP-2", "capacity": 2, "certificates": ["ISO9001", "SECRET"]},
+    {"supplier_id": "SUP-3", "capacity": 1, "certificates": []},
+    {"supplier_id": "SUP-4", "capacity": 0, "certificates": ["ISO9001"]}
+  ],
+  "bids": [
+    {"bid_id": "B-01", "lot_id": "LOT-A", "supplier_id": "SUP-1", "amount": 100},
+    {"bid_id": "B-02", "lot_id": "LOT-A", "supplier_id": "SUP-2", "amount": 500},
+    {"bid_id": "B-03", "lot_id": "LOT-B", "supplier_id": "SUP-1", "amount": 10},
+    {"bid_id": "B-04", "lot_id": "LOT-B", "supplier_id": "SUP-2", "amount": 20},
+    {"bid_id": "B-05", "lot_id": "LOT-B", "supplier_id": "SUP-4", "amount": 1},
+    {"bid_id": "B-06", "lot_id": "LOT-C", "supplier_id": "SUP-3", "amount": 5},
+    {"bid_id": "B-07", "lot_id": "LOT-C", "supplier_id": "SUP-2", "amount": 20},
+    {"bid_id": "B-08", "lot_id": "LOT-E", "supplier_id": "SUP-3", "amount": 7},
+    {"bid_id": "B-09", "lot_id": "LOT-F", "supplier_id": "SUP-1", "amount": 9},
+    {"bid_id": "B-10", "lot_id": "LOT-F", "supplier_id": "SUP-2", "amount": 11},
+    {"bid_id": "B-11", "lot_id": "LOT-G", "supplier_id": "SUP-1", "amount": 8}
+  ]
+}

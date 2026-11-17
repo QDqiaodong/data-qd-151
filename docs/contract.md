@@ -260,6 +260,65 @@ loan-schedule tranche-build --source SCENARIO.json --output DATASET.db
 - **到账回收不双计**：回收在资产流阶段先到账成为现金，报价基数只取期末仍未到账的 `pending_close` 与正常本金，已到账金额不会再出现在任何贷款的售价基数里。
 - **未来现金取消有显式表示**：行权把每笔剩余贷款的正常本金写入 `sold_principal`、未到账回收写入 `canceled_recovery`、售价写入 `sale_proceeds`，三者在同一期闭合；之后各期整行保留但所有流量为 0，`status='sold'`，池级也不再报价。守恒视图保证“确认回收 = 到账 + 取消”，被取消的钱不会凭空消失，也不会在后期再次到账。
 
+## 3A. 采购标段授予数据集（contract-award）
+
+```sh
+contract-award --source PROCUREMENT.json --output AWARDS.json
+loan-schedule contract-award --source PROCUREMENT.json --output AWARDS.json
+```
+
+独立命令，只读取输入 JSON、只发布输出 JSON，不访问网络、数据库、静态计划或 ledger 账本。现有命令与合同行为不变。失败退出 2 并在 stderr 给出可定位原因，且**不覆盖**已有输出；输入与输出同路径、输出为符号链接均拒绝。源字节 SHA-256 由既有受限读取器 `common.read` 取得，输出经既有安全 writer `common.save` 原子替换（临时文件 + `os.replace`）。
+
+### 3A.1 严格输入契约
+
+顶层恰为 `{procurement_id, lots, suppliers, bids}`。沿用仓库既有受限 JSON 读取器：≤8MB、UTF-8 严格 JSON、拒绝重复键、拒绝 `NaN`/`Infinity` 等非有限数。所有整数位置拒绝布尔冒充。未知或缺失字段（顶层与每个嵌套对象）都拒绝整份文件，不静默丢弃任何行。
+
+- `procurement_id`、`lot_id`、`supplier_id`、`bid_id` 与证书 ID 全部沿用既有 `ident` 规则：非空字符串、无首尾空白、≤128 字符、无控制字符。
+- `lots`：1..200 项，每项恰为 `{lot_id, required_certificates}`；`lot_id` 唯一；`required_certificates` 为字符串数组，不得含重复值。
+- `suppliers`：1..100 项，每项恰为 `{supplier_id, capacity, certificates}`；`supplier_id` 唯一；`capacity` 为 0..标段数的整数（按供应商整体计）；`certificates` 不得含重复值。
+- `bids`：0..5000 项，每项恰为 `{bid_id, lot_id, supplier_id, amount}`；`bid_id` 唯一；`amount` 为 1..10^12 整数；每个 `(supplier_id, lot_id)` 至多一份报价；`lot_id`/`supplier_id` 必须引用已声明的 lot/supplier，悬空引用拒绝。
+- 任一结构或范围错误拒绝整份采购文件，退出 2。
+
+### 3A.2 资格判定与授标目标
+
+一条报价成为**可授标边**当且仅当：供应商 `certificates` 覆盖该标段 `required_certificates` 的每个成员，且该供应商与该标段的报价存在（每对至多一份）。不合格报价**仍保留在输出中**，逐行列出 `missing_certificates`，但绝不作为授标边；容量按供应商整体计算。
+
+在所有可行授予方案（每标段至多一个供应商、每供应商中标标段数 ≤ `capacity`、只经合格边）中按三级目标择优：
+
+1. **最大化授标标段数**（未授标标段不计为零价中标）；
+2. 再**最小化中标总价**（`amount` 之和）；
+3. 再取**字典序最小方案**：把中标行的 `(lot_id, supplier_id, bid_id)` 排序后形成的完整序列作为比较键，仅当覆盖数与总价都相同后才比较该序列。
+
+选择不依赖输入数组行序：校验阶段即按 `lot_id`、`supplier_id`、`(lot_id,supplier_id,bid_id)` 排序归一化。实现用一次最小费用最大流把三级目标折叠为单一任意精度整数目标（总价乘以 `2^E` 加位置权重），因此在同价时由完整序列破同分，且截断误差无法压过一个最小金额单位。
+
+### 3A.3 输出契约（`schema_version:1`）
+
+键排序、缩进固定、`ensure_ascii=False`、无浮点，同一输入重跑字节一致。
+
+- `schema_version`、`procurement_id`、`source_sha256`（源字节 SHA-256）。
+- `objective`：`{rule, lot_count, supplier_count, bid_count, qualified_bid_count, awarded_lot_count, awarded_total_amount, unawarded_lot_count}`。`rule` 是三级目标的文字描述。
+- `lots`：按 `lot_id` 升序，逐 lot 输出
+  `{lot_id, required_certificates, awarded, awarded_bid_id, awarded_supplier_id, awarded_amount, unawarded_reason, candidates}`。`candidates` 按 `(supplier_id,bid_id)` 升序，逐条为 `{bid_id, supplier_id, amount, certificate_qualified, missing_certificates, selected}`，包含该 lot 的**全部**输入报价（含不合格者）。
+- `suppliers`：按 `supplier_id` 升序，逐条为 `{supplier_id, capacity, awarded_lot_count, awarded_lot_ids, awarded_total_amount, remaining_capacity}`；`awarded_lot_ids` 按 `lot_id` 升序。
+
+`unawarded_reason` 仅用于未授标 lot，按以下**优先级**判定（依据该 lot 实际报价与资格状态，不被其他原因覆盖）：
+
+1. `no_bid`：该 lot 没有任何报价；
+2. `no_qualified_bid`：有报价但没有证书合格的报价；
+3. `capacity_competition`：存在证书合格报价但该 lot 未进入最终最优方案（被容量或其他标段的竞争挤出）。
+
+已授标 lot 的 `unawarded_reason` 为 `null`；无合格报价的 lot 必须未授标，绝不补造零价报价。
+
+### 3A.4 发布前校验
+
+`award.validate_result` 在写盘前独立复核：lot/supplier 行与输入一一对应且有序、每条候选与原 bid 的 ID/供应商/金额一致、证书状态与缺失证书一致、每 lot 至多一个 `selected`、每个中标 bid 均来自输入且其供应商证书覆盖该 lot 需求、无 `(supplier_id)` 超容量、各 lot 只授一次、objective 汇总与逐行一致、未授标原因符合优先级。任一不符即 `ValueError`，退出 2 且保留旧输出。
+
+### 3A.5 样例与测试
+
+`fixtures/award/procurement.json` 为原创合成采购批次（7 个 lot、4 个供应商、11 份报价），刻意覆盖：资质不合格（缺 `SECRET`）、`capacity=0` 的供应商、容量争抢导致的全局取舍、仅一份合格报价、以及 `no_bid`/`no_qualified_bid`/`capacity_competition` 三种未授标原因。
+
+`tests/test_award.py` 用**独立于生产分配代码的穷举 oracle**（递归枚举全部可行授标集并取三级最优）对 120 个随机小实例及固定样例逐一比对，另覆盖资格阻断、容量冲突、标段唯一、同价字典序破同分、乱序输入稳定、退出码 2 保留旧输出、输出符号链接拒绝、独立 console entry point。
+
 ## 4. 事实保留与派生分摊为何保证历史截止与追溯依赖
 
 - **原始版本只追加**：每次成功的 upsert/void 都以 `(seq,event_id)` 为键保存一份不可变记录，带其源批次 SHA。任何历史截止都能仅凭 `seq <= K` 的原始版本重建出当时的知识集合；触发器使已提交事实不可改写或删除。

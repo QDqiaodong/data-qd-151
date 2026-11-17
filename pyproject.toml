@@ -9,5 +9,6 @@ requires-python = ">=3.11"
 dependencies = []
 [project.scripts]
 loan-schedule = "loan_schedule.cli:main"
+contract-award = "loan_schedule.cli:contract_award_main"
 [tool.setuptools.packages.find]
 where = ["src"]

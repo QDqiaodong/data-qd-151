@@ -3,9 +3,9 @@ import argparse, json, os, sqlite3, sys, tempfile
 from pathlib import Path
 from .common import read, save
 from .model import analyze, contract
-from . import ledger, sqlstore, stress, stress_sql
+from . import award, ledger, sqlstore, stress, stress_sql
 
-COMMANDS=('ledger-init','ledger-import','ledger-report','tranche-build')
+COMMANDS=('ledger-init','ledger-import','ledger-report','tranche-build','contract-award')
 
 
 def run(source):
@@ -109,6 +109,25 @@ def tranche_build(args):
             'final_junior_unpaid_interest':tranche_rows[-1]['closing_unpaid_interest']}
 
 
+def contract_award(args):
+    """Publish the auditable lot-award dataset without touching other paths."""
+    if args.output.is_symlink():
+        raise ValueError('output cannot be a symlink: '+str(args.output))
+    if args.source.resolve()==args.output.resolve():
+        raise ValueError('input and output must differ')
+    data,digest=read(args.source)
+    spec=award.validate_input(data)
+    result=award.optimize(spec)
+    report=award.build_report(spec,result,digest)
+    award.validate_result(spec,report)
+    save(args.output,report)
+    return {'schema_version':award.SCHEMA_VERSION,'command':'contract-award',
+            'output':str(args.output),'procurement_id':spec['procurement_id'],
+            'source_sha256':digest,
+            'awarded_lot_count':report['objective']['awarded_lot_count'],
+            'awarded_total_amount':report['objective']['awarded_total_amount']}
+
+
 def ledger_parser():
     parser=argparse.ArgumentParser(description=DESCRIPTION)
     subparsers=parser.add_subparsers(dest='command',required=True)
@@ -132,6 +151,12 @@ def ledger_parser():
         description='Build a standalone stressed cash-flow SQLite dataset.')
     build_parser.add_argument('--source',type=Path,required=True)
     build_parser.add_argument('--output',type=Path,required=True)
+
+    award_parser=subparsers.add_parser(
+        'contract-award',
+        description='Publish an auditable lot-award dataset.')
+    award_parser.add_argument('--source',type=Path,required=True)
+    award_parser.add_argument('--output',type=Path,required=True)
     return parser
 
 
@@ -164,11 +189,24 @@ def main(argv=None):
                 summary=ledger_report(args);save(args.output,summary)
             elif args.command=='tranche-build':
                 summary=tranche_build(args)
+            elif args.command=='contract-award':
+                summary=contract_award(args)
             else:
                 raise ValueError('unknown command: '+str(args.command))
     except (ValueError,TypeError,KeyError,OSError,OverflowError,RecursionError) as error:
         print(str(error),file=sys.stderr);return 2
     print(json.dumps(summary,sort_keys=True,ensure_ascii=False,allow_nan=False));return 0
+
+
+def contract_award_main(argv=None):
+    """Console entry point that always dispatches ``contract-award``.
+
+    ``loan_schedule.cli:main`` chooses the static schedule when the first
+    argument is not a subcommand, so a dedicated entry point is needed for a
+    script whose arguments start with ``--source``.
+    """
+    arguments=list(sys.argv[1:] if argv is None else argv)
+    return main(['contract-award',*arguments])
 
 
 if __name__=='__main__':raise SystemExit(main())
