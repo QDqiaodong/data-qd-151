@@ -1,0 +1,51 @@
+{
+  "pool_id": "POOL-200-CLEANUP",
+  "horizon": 3,
+  "loans": [
+    {
+      "loan_id": "LOAN-DEFAULT",
+      "contract": {
+        "principal": 100,
+        "periods": 2,
+        "rate_numerator": 0,
+        "rate_denominator": 1
+      }
+    },
+    {
+      "loan_id": "LOAN-PERFORMING",
+      "contract": {
+        "principal": 100,
+        "periods": 2,
+        "rate_numerator": 0,
+        "rate_denominator": 1
+      }
+    }
+  ],
+  "exits": [
+    {
+      "loan_id": "LOAN-DEFAULT",
+      "kind": "default",
+      "period": 1,
+      "recovery_numerator": 1,
+      "recovery_denominator": 1,
+      "recovery_lag": 2
+    }
+  ],
+  "senior": {
+    "principal": 120,
+    "rate_numerator": 0,
+    "rate_denominator": 1
+  },
+  "junior": {
+    "principal": 80,
+    "rate_numerator": 0,
+    "rate_denominator": 1
+  },
+  "reserve": 0,
+  "cleanup": {
+    "threshold_numerator": 1,
+    "threshold_denominator": 4,
+    "price_numerator": 1,
+    "price_denominator": 1
+  }
+}

@@ -3,9 +3,9 @@ import argparse, json, os, sqlite3, sys, tempfile
 from pathlib import Path
 from .common import read, save
 from .model import analyze, contract
-from . import ledger, sqlstore
+from . import ledger, sqlstore, stress, stress_sql
 
-COMMANDS=('ledger-init','ledger-import','ledger-report')
+COMMANDS=('ledger-init','ledger-import','ledger-report','tranche-build')
 
 
 def run(source):
@@ -79,6 +79,36 @@ def ledger_report(args):
     return result
 
 
+def tranche_build(args):
+    """Build the standalone stressed cash-flow SQLite dataset atomically."""
+    if args.output.is_symlink():
+        raise ValueError('output cannot be a symlink: '+str(args.output))
+    if args.source.resolve()==args.output.resolve():
+        raise ValueError('input and output must differ')
+    data,digest=read(args.source)
+    spec=stress.validate_input(data)
+    asset_rows,tranche_rows,pool_rows=stress.build_scenario(spec)
+    try:
+        temp=stress_sql.build_database(args.output,spec,asset_rows,tranche_rows,pool_rows,digest)
+        try:
+            stress_sql.publish(temp,args.output)
+        except OSError:
+            if os.path.exists(temp):os.unlink(temp)
+            raise
+    except sqlite3.Error as error:
+        raise ValueError('tranche-build failed: '+str(error)) from error
+    exercised=[row['period'] for row in pool_rows if row['cleanup_exercised']]
+    return {'schema_version':stress_sql.SCHEMA_VERSION,'command':'tranche-build',
+            'db':str(args.output),'pool_id':spec['pool_id'],
+            'source_sha256':digest,'horizon':spec['horizon'],
+            'loan_count':len(spec['loans']),'initial_principal':spec['initial_principal'],
+            'cleanup_period':exercised[0] if exercised else None,
+            'final_senior_principal':tranche_rows[-2]['closing_principal'],
+            'final_junior_principal':tranche_rows[-1]['closing_principal'],
+            'final_senior_unpaid_interest':tranche_rows[-2]['closing_unpaid_interest'],
+            'final_junior_unpaid_interest':tranche_rows[-1]['closing_unpaid_interest']}
+
+
 def ledger_parser():
     parser=argparse.ArgumentParser(description=DESCRIPTION)
     subparsers=parser.add_subparsers(dest='command',required=True)
@@ -96,6 +126,12 @@ def ledger_parser():
     report_parser.add_argument('--known-seq',type=int,required=True,dest='known_seq')
     report_parser.add_argument('--through-period',type=int,required=True,dest='through_period')
     report_parser.add_argument('--output',type=Path,required=True)
+
+    build_parser=subparsers.add_parser(
+        'tranche-build',
+        description='Build a standalone stressed cash-flow SQLite dataset.')
+    build_parser.add_argument('--source',type=Path,required=True)
+    build_parser.add_argument('--output',type=Path,required=True)
     return parser
 
 
@@ -126,6 +162,8 @@ def main(argv=None):
                 if args.output.resolve()==args.db.resolve():
                     raise ValueError('output must differ from the ledger database')
                 summary=ledger_report(args);save(args.output,summary)
+            elif args.command=='tranche-build':
+                summary=tranche_build(args)
             else:
                 raise ValueError('unknown command: '+str(args.command))
     except (ValueError,TypeError,KeyError,OSError,OverflowError,RecursionError) as error:
