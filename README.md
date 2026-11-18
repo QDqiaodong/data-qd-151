@@ -93,4 +93,21 @@ principal为1..10^12整数货币最小单位，periods=1..10000且不得超过�
 - 输出 `schema_version:1`，含 `source_sha256`、目标摘要、逐 lot（全部候选、资格、是否中标、中标 ID 或 `no_bid`/`no_qualified_bid`/`capacity_competition` 原因）与逐 supplier（capacity、获配 lot、剩余容量）汇总；键排序、复跑字节一致，写前做结果自校验并原子替换，失败退出 2 且保留旧输出。
 - `tests/test_award.py` 用独立穷举 oracle 核对小规模最优解，并覆盖资质阻断、容量全局冲突、标段唯一、同价破同分与乱序稳定。
 
+## 电表分时电量与日费用数据集（meter-tou）
+
+把不规则 UTC 采样区间按实际秒数分摊，裁剪到报告窗口，再按当地日界、费率边界与 UTC 偏移变化切成最大连续片段，输出逐当地日的覆盖缺口与精确分时费用：
+
+```sh
+.venv/bin/meter-tou --source fixtures/meter/sample.json --output run/meter.json
+# 或
+.venv/bin/loan-schedule meter-tou --source fixtures/meter/fall-back.json --output run/meter.json
+```
+
+- 输入 `{dataset_id,timezone,window_start,window_end,meters,tariffs,intervals}`：时区仅允许 `UTC`、`Asia/Shanghai`、`America/New_York`、`Europe/Berlin`，由标准库 `zoneinfo` 读取系统 IANA 数据，未知名称或数据缺失明确失败、不回退 UTC；窗口与区间为整数 Unix 秒并限 2000..2100 且 ≤31 天；1..200 个电表、1..96 档覆盖 `[0,1440)` 且无缺口的分钟费率（精确非负分数，每 Wh 最小货币单位）、0..20000 条区间；拒绝未知/缺失字段、重复键、布尔冒充整数、悬空引用、同表 UTC 区间相交与重复行。
+- 电量按原始 UTC 时长均匀分摊，先裁剪再切分；回拨日重复的当地小时分别按各自偏移计量，前拨跳过的不存在时段不补量；同区间内同日/同偏移/同费率的相邻片段合并，跨区间不合并。窗口终点不属于任何片段，端点的秒数保留、不取整到分钟。
+- 逐电表 × 逐当地日输出 `expected_seconds`（该日与窗口的物理秒数，自动反映 82800/90000）、`covered_seconds`、`missing_seconds` 与 `complete`/`partial`/`absent` 状态；无观测日也输出，绝不把缺口补成零电量事实。每日列出全部费率（未经者精确 0）、精确电量/费用 `{numerator,denominator}`，并在日末对精确费用只做一次非负 half-up 得 `cost_integer`；总费用为日整数费用之和，另给全窗口精确费用。
+- 输出 `schema_version:1`，含 `source_sha256`、窗口、稳定排序的片段/日/电表总计；写前核验“每区间裁剪电量=分片和、日与费率汇总=片段和、covered≤expected”，原子替换，失败退出 2 且保留旧报告；乱序输入业务结果相同、同源字节报告字节一致。样例 `fixtures/meter/`，测试 `tests/test_meter_tou.py`。
+
+不提供计费合规认证；样例均为原创合成数据。
+
 不提供金融建议或授标合规认证；样例均为原创合成数据。

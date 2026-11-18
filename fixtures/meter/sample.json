@@ -1,0 +1,56 @@
+{
+  "dataset_id": "meter-demo",
+  "timezone": "America/New_York",
+  "window_start": 1762056000,
+  "window_end": 1762146000,
+  "meters": [
+    "north-1",
+    "south-2"
+  ],
+  "tariffs": [
+    {
+      "tariff_id": "off-peak",
+      "start_minute": 0,
+      "end_minute": 420,
+      "rate_numerator": 1,
+      "rate_denominator": 2
+    },
+    {
+      "tariff_id": "peak",
+      "start_minute": 420,
+      "end_minute": 1260,
+      "rate_numerator": 3,
+      "rate_denominator": 2
+    },
+    {
+      "tariff_id": "late",
+      "start_minute": 1260,
+      "end_minute": 1440,
+      "rate_numerator": 1,
+      "rate_denominator": 1
+    }
+  ],
+  "intervals": [
+    {
+      "interval_id": "north-0001",
+      "meter_id": "north-1",
+      "start": 1762056000,
+      "end": 1762066800,
+      "energy_wh": 2500
+    },
+    {
+      "interval_id": "north-0002",
+      "meter_id": "north-1",
+      "start": 1762066800,
+      "end": 1762146000,
+      "energy_wh": 1250
+    },
+    {
+      "interval_id": "south-0001",
+      "meter_id": "south-2",
+      "start": 1762063200,
+      "end": 1762142400,
+      "energy_wh": 333
+    }
+  ]
+}

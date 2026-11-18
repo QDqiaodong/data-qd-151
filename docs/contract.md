@@ -319,6 +319,63 @@ loan-schedule contract-award --source PROCUREMENT.json --output AWARDS.json
 
 `tests/test_award.py` 用**独立于生产分配代码的穷举 oracle**（递归枚举全部可行授标集并取三级最优）对 120 个随机小实例及固定样例逐一比对，另覆盖资格阻断、容量冲突、标段唯一、同价字典序破同分、乱序输入稳定、退出码 2 保留旧输出、输出符号链接拒绝、独立 console entry point。
 
+## 3B. 电表分时电量与日费用数据集（meter-tou）
+
+```sh
+meter-tou --source METERS.json --output REPORT.json
+loan-schedule meter-tou --source METERS.json --output REPORT.json
+```
+
+独立命令：只读取一个严格 JSON、只发布一个 JSON 报告。不访问网络、数据库、静态计划、ledger 或压力数据集，现有命令行为不变。时区规则**只**来自 Python 标准库 `zoneinfo` 读取的系统 IANA 数据；代码中不写死任何夏令时偏移。失败（解析、时区、计算、结果校验、发布）一律退出 2、在 stderr 说明原因并保留旧报告；输入与输出同路径、输出为符号链接均拒绝；源 ≤8MB，源字节 SHA-256 由既有 `common.read` 取得，输出经既有 `common.save` 原子替换。
+
+### 3B.1 严格输入契约
+
+顶层恰为 `{dataset_id, timezone, window_start, window_end, meters, tariffs, intervals}`；未知/缺失字段、重复键、`NaN`/`Infinity`、布尔冒充整数全部拒绝。
+
+- `dataset_id`、`meter_id`、`tariff_id`、`interval_id` 沿用既有 `ident` 规则。
+- `timezone` 只允许 `UTC`、`Asia/Shanghai`、`America/New_York`、`Europe/Berlin`（大小写敏感）。名字不在列表、`ZoneInfo` 未知名称或系统时区数据不可用都明确失败，**绝不回退 UTC**。
+- `window_start`、`window_end` 为整数 Unix 秒，均在 `2000-01-01T00:00:00Z`（946684800）至 `2100-01-01T00:00:00Z`（4102444800）之间；`window_start < window_end` 且跨度 ≤ `31*86400` 秒。窗口左闭右开。
+- `meters`：1..200 个唯一 `ident`，声明哪些电表需要在报告中逐日出现。
+- `tariffs`：1..96 项，每项恰为 `{tariff_id, start_minute, end_minute, rate_numerator, rate_denominator}`。`tariff_id` 唯一；`start_minute`/`end_minute` 为 0..1440 整数且 `start_minute < end_minute`；`rate_numerator` 为 0..10^6、`rate_denominator` 为 1..10^6，二者构成非负精确分数，单位为**每 Wh 的最小货币单位**（允许 0 费率，无小数货币）。按 `start_minute` 排序后必须无缝、无重叠地覆盖 `[0,1440)`：首项从 0 起，逐项首尾相接，末项止于 1440。费率每天按**当地墙钟分钟**重复，不区分工作日/节假日。
+- `intervals`：0..20000 项，每项恰为 `{interval_id, meter_id, start, end, energy_wh}`。`interval_id` 全局唯一；`meter_id` 必须引用已声明电表；`start`/`end` 为整数 Unix 秒、均在上述时间范围内、`start < end`、时长 ≤ `31*86400`；`energy_wh` 为 0..10^12 整数。**同一电表**的原始 UTC 区间不得相交（`start < 前一 end` 即拒绝）；端点相接允许，不同电表可同时段。重复行拒绝，不去重、不择优覆盖。所有区间先全量校验再裁剪：窗口外的区间同样参与 ID、引用、范围与相交检查，不能用窗口裁剪掩盖错误。
+
+### 3B.2 分摊与片段语义
+
+1. 每条区间的电量按**原始 UTC 时长**均匀分摊（`energy_wh / (end-start)` Wh 每秒），与窗口裁剪无关；**不得**把裁剪后剩余电量重新按新时长分配。
+2. 先按报告窗口裁剪（`[max(start,window_start), min(end,window_end))`），得到 `clipped_seconds`；无正秒数交集的区间不产生片段。
+3. 再在该裁剪区间内按三类边界切成最大连续片段：当地日界（当地 00:00）、费率边界（`start_minute` 对应的当地墙钟时刻）、UTC 偏移变化（夏令时切换点，按 UTC 秒二分定位）。片段内的时刻保留秒级精度，输入的秒数端点不取整到分钟。
+4. 夏令时回拨时，同一当地墙钟时段会经过两次，两次必须**分别**按各自 UTC 偏移计量（例如 America/New_York 2025-11-02 的 01:00 分别带 -14400 与 -18000）；夏令时前拨跳过的不存在当地时段**不补量**，相关费率得到精确 0。
+5. 「最大连续片段」仅在同一**原区间**内、相邻且 `(local_date, utc_offset_seconds, tariff_id)` 完全一致时才合并；不同原区间之间绝不合并（即使端点相接）。结果不依赖输入顺序。
+6. 片段起点处的当地时刻决定所属当地日与费率：当地 00:00 归新日，费率终点归下一档。
+
+片段字段：`{interval_id, meter_id, start, end, local_date, utc_offset_seconds, tariff_id, seconds, energy_wh_exact, cost_exact}`。`seconds == end-start`；`energy_wh_exact` 为 `{numerator,denominator}` 约分精确分数（分母正数）；`cost_exact = energy × 费率` 亦为精确分数。
+
+### 3B.3 当地日、覆盖与费用
+
+- 报告为**每个已声明电表 × 窗口内每个当地日**输出一行（两者笛卡尔积），包括无任何观测的日；当地日由系统时区规则从窗口端点推导，窗口可能只覆盖某当地日的一部分。
+- `expected_seconds` = 该当地日与报告窗口的**物理**秒数交集（自动反映 82800/86400/90000 等）；不允许固定按 86400 判断。
+- `covered_seconds` = 该电表在该当地日、窗口内、被有效输入区间覆盖的物理秒数（相交区间按半开集合并计算，不重复计）。
+- `missing_seconds = expected_seconds - covered_seconds`；`coverage_status`：`covered == expected` → `complete`，`0 < covered < expected` → `partial`，`covered == 0` → `absent`。缺失观测只作为缺口报告，**绝不**补成零电量事实。
+- 日行字段：`{meter_id, local_date, expected_seconds, covered_seconds, missing_seconds, coverage_status, energy_wh_exact, cost_exact, cost_integer, tariffs}`。`tariffs` 按 `tariff_id` 升序，**列出全部已配置费率**（未经者填精确 0），逐项 `{tariff_id, energy_wh_exact, cost_exact}`。
+- 日整数费用 `cost_integer` 由当日精确费用 `cost_exact` 做**一次**非负 half-up 得到；日 `cost_exact` 是该日所有片段费用之和，而非逐片段舍入后相加。总费用 `totals.cost_integer` 为各电表各日整数费用之和；`totals.cost_exact` 为全窗口精确费用，二者不必相等。
+- 电表总结 `meters` 按 `meter_id` 升序，逐条 `{meter_id, interval_count, day_count, segment_count, expected_seconds, covered_seconds, missing_seconds, energy_wh_exact, cost_exact, cost_integer}`；其中 `cost_integer` 为该电表各日整数费用之和（不是对其精确费用再舍入一次），`interval_count` 为原始输入区间条数（含窗口外）。`totals` 另含 `meter_count`、`day_count`、`segment_count` 与窗口覆盖/电量/费用合计。
+
+### 3B.4 输出契约（`schema_version:1`）
+
+键排序、缩进固定、`ensure_ascii=False`、无浮点。顶层：
+`{schema_version, dataset_id, source_sha256, timezone, window:{start,end,seconds}, tariffs, totals, meters, days, segments}`。
+`tariffs` 按 `tariff_id` 升序原样输出配置（分钟与费率分子/分母）；`segments` 按 `(meter_id,start,end,interval_id)` 升序；`days` 按 `(meter_id,local_date)` 升序。同一输入字节（即使数组乱序）业务结果相同，同一源字节报告**字节一致**。
+
+### 3B.5 发布前校验
+
+`meter_tou.validate_result` 在 `common.save` 前独立复核：schema/dataset/timezone/window/sha 一致；每个片段位于窗口与其原区间内、`seconds` 正确、当地日/偏移/费率与 `zoneinfo` 及墙钟起点一致、片段未跨越日界/费率界/偏移变化、电量严格等于“原电量 × 片段秒/原秒”、费用等于电量乘费率；同一原区间的片段秒数与电量之和恰等其裁剪值；无应合并而未合并的相邻片段；每日及每费率汇总、电表总计与总计均等于片段精确和；`covered_seconds ≤ expected_seconds` 且 `missing_seconds` 一致；日整数费用确为 half-up。任一不符即 `ValueError`，退出 2 且保留旧输出。
+
+### 3B.6 样例与测试
+
+`fixtures/meter/` 为原创合成数据：`sample.json`（纽约回拨日、两表、窗口内部分覆盖与整日覆盖）、`sparse.json`（上海、完全未观测电表）、`fall-back.json` 与 `spring-forward.json`（两段验收用例）、`berlin-midnight.json`（非整分钟端点跨当地午夜与费率边界）。
+
+`tests/test_meter_tou.py` 覆盖两条验收用例（90000/82800 秒、200/2300 Wh、2900/2300 费用、重复 01 点双偏移）、UTC 窗口裁剪（`covered=3600, missing=3600`）、两个半费区间只舍入一次（日整数 1）、无区间电表逐日 `absent`、非整分钟端点、相邻片段合并且跨区间不合并、跨午夜/跨窗口、DST 前拨/回拨、重叠与重复行拒绝（含窗口外）、乱序稳定与字节一致、退出 2 保留旧报告、同路径与符号链接拒绝、8MB 限制；另有逐秒枚举 oracle 交叉核对电量与覆盖秒数。
+
 ## 4. 事实保留与派生分摊为何保证历史截止与追溯依赖
 
 - **原始版本只追加**：每次成功的 upsert/void 都以 `(seq,event_id)` 为键保存一份不可变记录，带其源批次 SHA。任何历史截止都能仅凭 `seq <= K` 的原始版本重建出当时的知识集合；触发器使已提交事实不可改写或删除。

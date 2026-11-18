@@ -1,0 +1,41 @@
+{
+  "dataset_id": "meter-spring-forward",
+  "timezone": "America/New_York",
+  "window_start": 1741496400,
+  "window_end": 1741579200,
+  "meters": [
+    "m1"
+  ],
+  "tariffs": [
+    {
+      "tariff_id": "base",
+      "start_minute": 0,
+      "end_minute": 120,
+      "rate_numerator": 1,
+      "rate_denominator": 1
+    },
+    {
+      "tariff_id": "high",
+      "start_minute": 120,
+      "end_minute": 180,
+      "rate_numerator": 3,
+      "rate_denominator": 1
+    },
+    {
+      "tariff_id": "rest",
+      "start_minute": 180,
+      "end_minute": 1440,
+      "rate_numerator": 1,
+      "rate_denominator": 1
+    }
+  ],
+  "intervals": [
+    {
+      "interval_id": "span",
+      "meter_id": "m1",
+      "start": 1741496400,
+      "end": 1741579200,
+      "energy_wh": 2300
+    }
+  ]
+}

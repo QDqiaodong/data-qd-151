@@ -3,9 +3,9 @@ import argparse, json, os, sqlite3, sys, tempfile
 from pathlib import Path
 from .common import read, save
 from .model import analyze, contract
-from . import award, ledger, sqlstore, stress, stress_sql
+from . import award, ledger, meter_tou, sqlstore, stress, stress_sql
 
-COMMANDS=('ledger-init','ledger-import','ledger-report','tranche-build','contract-award')
+COMMANDS=('ledger-init','ledger-import','ledger-report','tranche-build','contract-award','meter-tou')
 
 
 def run(source):
@@ -109,6 +109,27 @@ def tranche_build(args):
             'final_junior_unpaid_interest':tranche_rows[-1]['closing_unpaid_interest']}
 
 
+def meter_tou_report(args):
+    """Publish the time-of-use meter energy and local-day billing report."""
+    if args.output.is_symlink():
+        raise ValueError('output cannot be a symlink: '+str(args.output))
+    if args.source.resolve()==args.output.resolve():
+        raise ValueError('input and output must differ')
+    data,digest=read(args.source)
+    spec=meter_tou.validate_input(data)
+    report=meter_tou.build_report(spec,digest)
+    meter_tou.validate_result(spec,report)
+    save(args.output,report)
+    return {'schema_version':meter_tou.SCHEMA_VERSION,'command':'meter-tou',
+            'output':str(args.output),'dataset_id':spec['dataset_id'],
+            'source_sha256':digest,'timezone':spec['timezone'],
+            'meter_count':len(spec['meters']),
+            'day_count':report['totals']['day_count'],
+            'segment_count':report['totals']['segment_count'],
+            'cost_exact':report['totals']['cost_exact'],
+            'cost_integer':report['totals']['cost_integer']}
+
+
 def contract_award(args):
     """Publish the auditable lot-award dataset without touching other paths."""
     if args.output.is_symlink():
@@ -157,6 +178,12 @@ def ledger_parser():
         description='Publish an auditable lot-award dataset.')
     award_parser.add_argument('--source',type=Path,required=True)
     award_parser.add_argument('--output',type=Path,required=True)
+
+    meter_parser=subparsers.add_parser(
+        'meter-tou',
+        description='Publish time-of-use meter energy and local-day billing.')
+    meter_parser.add_argument('--source',type=Path,required=True)
+    meter_parser.add_argument('--output',type=Path,required=True)
     return parser
 
 
@@ -191,11 +218,19 @@ def main(argv=None):
                 summary=tranche_build(args)
             elif args.command=='contract-award':
                 summary=contract_award(args)
+            elif args.command=='meter-tou':
+                summary=meter_tou_report(args)
             else:
                 raise ValueError('unknown command: '+str(args.command))
     except (ValueError,TypeError,KeyError,OSError,OverflowError,RecursionError) as error:
         print(str(error),file=sys.stderr);return 2
     print(json.dumps(summary,sort_keys=True,ensure_ascii=False,allow_nan=False));return 0
+
+
+def meter_tou_main(argv=None):
+    """Console entry point that always dispatches ``meter-tou``."""
+    arguments=list(sys.argv[1:] if argv is None else argv)
+    return main(['meter-tou',*arguments])
 
 
 def contract_award_main(argv=None):

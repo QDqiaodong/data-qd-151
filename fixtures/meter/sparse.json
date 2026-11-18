@@ -1,0 +1,28 @@
+{
+  "dataset_id": "meter-sparse",
+  "timezone": "Asia/Shanghai",
+  "window_start": 1735689600,
+  "window_end": 1735776000,
+  "meters": [
+    "shed-a",
+    "shed-b"
+  ],
+  "tariffs": [
+    {
+      "tariff_id": "flat",
+      "start_minute": 0,
+      "end_minute": 1440,
+      "rate_numerator": 1,
+      "rate_denominator": 3
+    }
+  ],
+  "intervals": [
+    {
+      "interval_id": "a-1",
+      "meter_id": "shed-a",
+      "start": 1735689600,
+      "end": 1735693201,
+      "energy_wh": 5
+    }
+  ]
+}

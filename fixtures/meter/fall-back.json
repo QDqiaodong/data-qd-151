@@ -1,0 +1,41 @@
+{
+  "dataset_id": "meter-fall-back",
+  "timezone": "America/New_York",
+  "window_start": 1762056000,
+  "window_end": 1762146000,
+  "meters": [
+    "m1"
+  ],
+  "tariffs": [
+    {
+      "tariff_id": "base",
+      "start_minute": 0,
+      "end_minute": 60,
+      "rate_numerator": 1,
+      "rate_denominator": 1
+    },
+    {
+      "tariff_id": "high",
+      "start_minute": 60,
+      "end_minute": 120,
+      "rate_numerator": 3,
+      "rate_denominator": 1
+    },
+    {
+      "tariff_id": "rest",
+      "start_minute": 120,
+      "end_minute": 1440,
+      "rate_numerator": 1,
+      "rate_denominator": 1
+    }
+  ],
+  "intervals": [
+    {
+      "interval_id": "span",
+      "meter_id": "m1",
+      "start": 1762056000,
+      "end": 1762146000,
+      "energy_wh": 2500
+    }
+  ]
+}
