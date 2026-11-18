@@ -1,0 +1,54 @@
+{
+  "dataset_id": "cdc-linked-acceptance",
+  "tables": [
+    {
+      "table": "P",
+      "columns": [
+        {"name": "id", "type": "integer", "nullable": false},
+        {"name": "label", "type": "string", "nullable": false}
+      ],
+      "primary_key": ["id"],
+      "foreign_keys": []
+    },
+    {
+      "table": "C",
+      "columns": [
+        {"name": "id", "type": "integer", "nullable": false},
+        {"name": "p_id", "type": "integer", "nullable": false}
+      ],
+      "primary_key": ["id"],
+      "foreign_keys": [
+        {"fk_id": "fk_c_p", "columns": ["p_id"], "ref_table": "P"}
+      ]
+    }
+  ],
+  "initial": [
+    {"table": "P", "values": [1, "old"]}
+  ],
+  "records": [
+    {"lsn": 1, "txid": "A", "kind": "begin"},
+    {"lsn": 2, "txid": "B", "kind": "begin"},
+    {"lsn": 3, "txid": "A", "kind": "change", "table": "P",
+     "before": [1, "old"], "after": [1, "A"]},
+    {"lsn": 4, "txid": "B", "kind": "change", "table": "P",
+     "before": [1, "old"], "after": [1, "B"]},
+    {"lsn": 5, "txid": "B", "kind": "commit"},
+    {"lsn": 6, "txid": "A", "kind": "commit"},
+    {"lsn": 7, "txid": "D", "kind": "begin"},
+    {"lsn": 8, "txid": "D", "kind": "change", "table": "C",
+     "before": null, "after": [10, 2]},
+    {"lsn": 9, "txid": "D", "kind": "change", "table": "P",
+     "before": null, "after": [2, "new"]},
+    {"lsn": 10, "txid": "D", "kind": "commit"},
+    {"lsn": 11, "txid": "E", "kind": "begin"},
+    {"lsn": 12, "txid": "E", "kind": "change", "table": "P",
+     "before": [2, "new"], "after": null},
+    {"lsn": 13, "txid": "E", "kind": "commit"},
+    {"lsn": 14, "txid": "F", "kind": "begin"},
+    {"lsn": 15, "txid": "F", "kind": "change", "table": "P",
+     "before": [2, "new"], "after": null},
+    {"lsn": 16, "txid": "F", "kind": "change", "table": "C",
+     "before": [10, 2], "after": null},
+    {"lsn": 17, "txid": "F", "kind": "commit"}
+  ]
+}

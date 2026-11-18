@@ -3,9 +3,9 @@ import argparse, json, os, sqlite3, sys, tempfile
 from pathlib import Path
 from .common import read, save
 from .model import analyze, contract
-from . import award, ledger, meter_tou, sqlstore, stress, stress_sql, table_keys
+from . import award, cdc, ledger, meter_tou, sqlstore, stress, stress_sql, table_keys
 
-COMMANDS=('ledger-init','ledger-import','ledger-report','tranche-build','contract-award','meter-tou','table-keys')
+COMMANDS=('ledger-init','ledger-import','ledger-report','tranche-build','contract-award','meter-tou','table-keys','cdc-materialize')
 
 
 def run(source):
@@ -168,6 +168,27 @@ def table_keys_report(args):
             'maximal_nonkey_count':len(report['maximal_nonkeys'])}
 
 
+def cdc_materialize_report(args):
+    """Publish the CDC materialization snapshot and per-transaction audit."""
+    if args.output.is_symlink():
+        raise ValueError('output cannot be a symlink: '+str(args.output))
+    if args.source.resolve()==args.output.resolve():
+        raise ValueError('input and output must differ')
+    data,digest=read(args.source)
+    spec=cdc.validate_input(data)
+    material=cdc.materialize(spec)
+    report=cdc.build_report(spec,digest,material)
+    cdc.validate_result(spec,digest,report)
+    save(args.output,report)
+    accepted=sum(1 for item in report['transactions'] if item['status']=='accepted')
+    rejected=sum(1 for item in report['transactions'] if item['status']=='rejected')
+    return {'schema_version':cdc.SCHEMA_VERSION,'command':'cdc-materialize',
+            'output':str(args.output),'dataset_id':spec['dataset_id'],
+            'source_sha256':digest,'table_count':len(report['tables']),
+            'transaction_count':len(report['transactions']),
+            'accepted_count':accepted,'rejected_count':rejected}
+
+
 def ledger_parser():
     parser=argparse.ArgumentParser(description=DESCRIPTION)
     subparsers=parser.add_subparsers(dest='command',required=True)
@@ -209,6 +230,12 @@ def ledger_parser():
         description='Publish the relational candidate-key and collision profile.')
     keys_parser.add_argument('--source',type=Path,required=True)
     keys_parser.add_argument('--output',type=Path,required=True)
+
+    cdc_parser=subparsers.add_parser(
+        'cdc-materialize',
+        description='Materialize an interleaved CDC log into the committed snapshot.')
+    cdc_parser.add_argument('--source',type=Path,required=True)
+    cdc_parser.add_argument('--output',type=Path,required=True)
     return parser
 
 
@@ -247,10 +274,16 @@ def main(argv=None):
                 summary=meter_tou_report(args)
             elif args.command=='table-keys':
                 summary=table_keys_report(args)
+            elif args.command=='cdc-materialize':
+                summary=cdc_materialize_report(args)
             else:
                 raise ValueError('unknown command: '+str(args.command))
     except (ValueError,TypeError,KeyError,OSError,OverflowError,RecursionError) as error:
         print(str(error),file=sys.stderr);return 2
+    except Exception as error:
+        # Any internal materialization/verification failure must still preserve
+        # the previous report and use the structural-failure exit code.
+        print('internal error: '+str(error),file=sys.stderr);return 2
     print(json.dumps(summary,sort_keys=True,ensure_ascii=False,allow_nan=False));return 0
 
 
@@ -275,6 +308,12 @@ def contract_award_main(argv=None):
     """
     arguments=list(sys.argv[1:] if argv is None else argv)
     return main(['contract-award',*arguments])
+
+
+def cdc_materialize_main(argv=None):
+    """Console entry point that always dispatches ``cdc-materialize``."""
+    arguments=list(sys.argv[1:] if argv is None else argv)
+    return main(['cdc-materialize',*arguments])
 
 
 if __name__=='__main__':raise SystemExit(main())

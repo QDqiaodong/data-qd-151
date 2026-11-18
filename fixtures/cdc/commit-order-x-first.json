@@ -1,0 +1,39 @@
+{
+  "dataset_id": "cdc-commit-order-x-first",
+  "tables": [
+    {
+      "table": "P",
+      "columns": [
+        {"name": "id", "type": "integer", "nullable": false},
+        {"name": "label", "type": "string", "nullable": true}
+      ],
+      "primary_key": ["id"],
+      "foreign_keys": []
+    },
+    {
+      "table": "C",
+      "columns": [
+        {"name": "id", "type": "integer", "nullable": false},
+        {"name": "p_id", "type": "integer", "nullable": false}
+      ],
+      "primary_key": ["id"],
+      "foreign_keys": [
+        {"fk_id": "fk_c_p", "columns": ["p_id"], "ref_table": "P"}
+      ]
+    }
+  ],
+  "initial": [
+    {"table": "C", "values": [10, 1]},
+    {"table": "P", "values": [1, "root"]}
+  ],
+  "records": [
+    {"lsn": 1, "txid": "X", "kind": "begin"},
+    {"lsn": 2, "txid": "Y", "kind": "begin"},
+    {"lsn": 3, "txid": "X", "kind": "change", "table": "P",
+     "before": [1, "root"], "after": null},
+    {"lsn": 4, "txid": "Y", "kind": "change", "table": "C",
+     "before": [10, 1], "after": null},
+    {"lsn": 5, "txid": "X", "kind": "commit"},
+    {"lsn": 6, "txid": "Y", "kind": "commit"}
+  ]
+}

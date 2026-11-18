@@ -25,8 +25,23 @@ python3 -m venv .venv
 同输入重跑不累加。测试使用临时目录，运行产物在忽略的run/。
 
 src/loan_schedule/model.py 为业务模型，allocation.py 为事实分摊引擎，ledger.py 负责不可变事实与知识截止，
-sqlstore.py 管理 SQLite 事务与表结构，common.py 提供受限JSON及报告发布，cli.py 衔接数据链路。
+sqlstore.py 管理 SQLite 事务与表结构，cdc.py 负责交错 CDC 事务日志的提交可见快照与逐事务审计，
+common.py 提供受限JSON及报告发布，cli.py 衔接数据链路。
 fixtures 为明确自制样例，代码与样例采用MIT许可。
+
+## CDC 事务日志核对（cdc-materialize）
+
+```sh
+.venv/bin/loan-schedule cdc-materialize --source fixtures/cdc/linked-acceptance.json --output run/cdc.json
+# 等价入口：python -m loan_schedule.cli cdc-materialize ...；专用 console 脚本 cdc-materialize ...
+```
+
+把多表交错、带 begin/commit/abort 边界的行变更日志物化为最终提交可见关系，并逐事务输出
+accepted/rejected/aborted/open 审计与首个错误证据（`missing_row`/`before_mismatch`/
+`primary_key_conflict`/`foreign_key`）。commit 时在最新已接纳快照的私有副本上按 change 原序重演，
+before 像按提交时刻重新核对；外键在整笔重演成功后对全关系（含未改动子表）联合裁决，支持循环、
+自引用与 null 分量豁免。结构/框架错误退出 2 并保留旧报告；业务拒绝进入报告且退出 0。
+完整契约见 [docs/cdc-materialize.md](docs/cdc-materialize.md)，原创样例在 `fixtures/cdc/`。
 
 ## 静态计划（v1 契约未变）
 

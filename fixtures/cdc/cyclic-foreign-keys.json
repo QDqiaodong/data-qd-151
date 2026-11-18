@@ -1,0 +1,46 @@
+{
+  "dataset_id": "cdc-cyclic-foreign-keys",
+  "tables": [
+    {
+      "table": "U",
+      "columns": [
+        {"name": "id", "type": "integer", "nullable": false},
+        {"name": "v_id", "type": "integer", "nullable": false}
+      ],
+      "primary_key": ["id"],
+      "foreign_keys": [
+        {"fk_id": "fk_u_v", "columns": ["v_id"], "ref_table": "V"}
+      ]
+    },
+    {
+      "table": "V",
+      "columns": [
+        {"name": "id", "type": "integer", "nullable": false},
+        {"name": "u_id", "type": "integer", "nullable": false}
+      ],
+      "primary_key": ["id"],
+      "foreign_keys": [
+        {"fk_id": "fk_v_u", "columns": ["u_id"], "ref_table": "U"}
+      ]
+    }
+  ],
+  "initial": [],
+  "records": [
+    {"lsn": 1, "txid": "T1", "kind": "begin"},
+    {"lsn": 2, "txid": "T1", "kind": "change", "table": "U",
+     "before": null, "after": [1, 1]},
+    {"lsn": 3, "txid": "T1", "kind": "change", "table": "V",
+     "before": null, "after": [1, 1]},
+    {"lsn": 4, "txid": "T1", "kind": "commit"},
+    {"lsn": 5, "txid": "T2", "kind": "begin"},
+    {"lsn": 6, "txid": "T2", "kind": "change", "table": "U",
+     "before": [1, 1], "after": null},
+    {"lsn": 7, "txid": "T2", "kind": "commit"},
+    {"lsn": 8, "txid": "T3", "kind": "begin"},
+    {"lsn": 9, "txid": "T3", "kind": "change", "table": "U",
+     "before": [1, 1], "after": null},
+    {"lsn": 10, "txid": "T3", "kind": "change", "table": "V",
+     "before": [1, 1], "after": null},
+    {"lsn": 11, "txid": "T3", "kind": "commit"}
+  ]
+}

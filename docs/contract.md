@@ -471,3 +471,20 @@ python tests/tools/make_scale_fixture.py --rows 4096 --output /tmp/scale.json
 ## 5. 边界
 
 不涉及外部服务、真实日期、并发发布或断电恢复保证；单操作者批处理。不认证利率合法性，不提供金融建议；样例均为原创合成数据。压力数据集只在本地用 Python 标准库与 SQLite 构建，不访问网络。
+
+## 6. CDC 事务日志核对（cdc-materialize，独立数据产品）
+
+交错跨表行变更日志（`{dataset_id,tables,initial,records}`）在每个 commit 到达时
+于最新已接纳快照上重演为最终提交可见快照，并逐事务输出接纳/拒绝证据。入口：
+
+```sh
+loan-schedule cdc-materialize --source INPUT --output REPORT
+python -m loan_schedule.cli cdc-materialize --source INPUT --output REPORT
+cdc-materialize --source INPUT --output REPORT
+```
+
+完整输入字段、错因优先级（先定位并核 before，再查 after 主键；全部 change 成功
+后才对全关系核外键）、类型化排序、两种候选关系设计的正确性义务（隔离未提交行、
+失败回滚、捕获未改动子表反向引用；不校验约束的方案不构成备选）、发布前独立核验
+与样例/测试资产，见 [cdc-materialize 契约](cdc-materialize.md)。结构或事务框架
+错误整份失败退出 2 并保留旧报告；合法日志内的业务提交拒绝进入报告且退出 0。

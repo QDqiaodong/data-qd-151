@@ -1,0 +1,109 @@
+{
+  "dataset_id": "cdc-coverage-gallery",
+  "tables": [
+    {
+      "table": "node",
+      "columns": [
+        {"name": "kind", "type": "string", "nullable": false},
+        {"name": "code", "type": "integer", "nullable": false},
+        {"name": "parent_kind", "type": "string", "nullable": true},
+        {"name": "parent_code", "type": "integer", "nullable": true},
+        {"name": "active", "type": "boolean", "nullable": false}
+      ],
+      "primary_key": ["kind", "code"],
+      "foreign_keys": [
+        {"fk_id": "fk_node_self",
+         "columns": ["parent_kind", "parent_code"], "ref_table": "node"}
+      ]
+    },
+    {
+      "table": "leaf",
+      "columns": [
+        {"name": "kind", "type": "string", "nullable": false},
+        {"name": "code", "type": "integer", "nullable": false},
+        {"name": "note", "type": "string", "nullable": true}
+      ],
+      "primary_key": ["kind", "code"],
+      "foreign_keys": [
+        {"fk_id": "fk_leaf_node",
+         "columns": ["kind", "code"], "ref_table": "node"}
+      ]
+    }
+  ],
+  "initial": [
+    {"table": "node", "values": ["root", 1, null, null, true]},
+    {"table": "node", "values": ["root", 2, "root", 1, false]},
+    {"table": "leaf", "values": ["root", 1, "seed leaf"]}
+  ],
+  "records": [
+    {"lsn": 1, "txid": "empty-ok", "kind": "begin"},
+    {"lsn": 2, "txid": "empty-ok", "kind": "commit"},
+
+    {"lsn": 3, "txid": "aborted-noise", "kind": "begin"},
+    {"lsn": 4, "txid": "aborted-noise", "kind": "change", "table": "node",
+     "before": ["root", 9, null, null, true], "after": null},
+    {"lsn": 5, "txid": "aborted-noise", "kind": "abort"},
+
+    {"lsn": 6, "txid": "left-open", "kind": "begin"},
+    {"lsn": 7, "txid": "left-open", "kind": "change", "table": "node",
+     "before": null, "after": ["open", 7, null, null, true]},
+
+    {"lsn": 8, "txid": "self-insert", "kind": "begin"},
+    {"lsn": 9, "txid": "self-insert", "kind": "change", "table": "node",
+     "before": null, "after": ["root", 3, "root", 3, true]},
+    {"lsn": 10, "txid": "self-insert", "kind": "commit"},
+
+    {"lsn": 11, "txid": "pk-update", "kind": "begin"},
+    {"lsn": 12, "txid": "pk-update", "kind": "change", "table": "node",
+     "before": ["root", 2, "root", 1, false],
+     "after": ["root", 22, "root", 1, false]},
+    {"lsn": 13, "txid": "pk-update", "kind": "commit"},
+
+    {"lsn": 14, "txid": "same-key-twice", "kind": "begin"},
+    {"lsn": 15, "txid": "same-key-twice", "kind": "change", "table": "node",
+     "before": ["root", 1, null, null, true],
+     "after": ["root", 1, null, null, false]},
+    {"lsn": 16, "txid": "same-key-twice", "kind": "change", "table": "node",
+     "before": ["root", 1, null, null, false],
+     "after": ["root", 1, null, null, true]},
+    {"lsn": 17, "txid": "same-key-twice", "kind": "commit"},
+
+    {"lsn": 18, "txid": "delete-reinsert", "kind": "begin"},
+    {"lsn": 19, "txid": "delete-reinsert", "kind": "change", "table": "leaf",
+     "before": ["root", 1, "seed leaf"], "after": null},
+    {"lsn": 20, "txid": "delete-reinsert", "kind": "change", "table": "leaf",
+     "before": null, "after": ["root", 1, "reborn leaf"]},
+    {"lsn": 21, "txid": "delete-reinsert", "kind": "commit"},
+
+    {"lsn": 22, "txid": "null-fk-exempt", "kind": "begin"},
+    {"lsn": 23, "txid": "null-fk-exempt", "kind": "change", "table": "node",
+     "before": null, "after": ["orphan", 5, null, null, true]},
+    {"lsn": 24, "txid": "null-fk-exempt", "kind": "commit"},
+
+    {"lsn": 25, "txid": "composite-fk-violation", "kind": "begin"},
+    {"lsn": 26, "txid": "composite-fk-violation", "kind": "change", "table": "leaf",
+     "before": null, "after": ["ghost", 99, "dangling composite parent"]},
+    {"lsn": 27, "txid": "composite-fk-violation", "kind": "commit"},
+
+    {"lsn": 28, "txid": "missing-row", "kind": "begin"},
+    {"lsn": 29, "txid": "missing-row", "kind": "change", "table": "node",
+     "before": ["ghost", 99, null, null, true], "after": null},
+    {"lsn": 30, "txid": "missing-row", "kind": "commit"},
+
+    {"lsn": 31, "txid": "before-mismatch", "kind": "begin"},
+    {"lsn": 32, "txid": "before-mismatch", "kind": "change", "table": "node",
+     "before": ["root", 1, null, null, false],
+     "after": ["root", 1, null, null, false]},
+    {"lsn": 33, "txid": "before-mismatch", "kind": "commit"},
+
+    {"lsn": 34, "txid": "pk-conflict", "kind": "begin"},
+    {"lsn": 35, "txid": "pk-conflict", "kind": "change", "table": "node",
+     "before": null, "after": ["root", 22, "root", 1, true]},
+    {"lsn": 36, "txid": "pk-conflict", "kind": "commit"},
+
+    {"lsn": 37, "txid": "unchanged-child-blocks-parent", "kind": "begin"},
+    {"lsn": 38, "txid": "unchanged-child-blocks-parent", "kind": "change",
+     "table": "node", "before": ["root", 1, null, null, true], "after": null},
+    {"lsn": 39, "txid": "unchanged-child-blocks-parent", "kind": "commit"}
+  ]
+}

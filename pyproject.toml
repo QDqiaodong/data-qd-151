@@ -12,5 +12,6 @@ loan-schedule = "loan_schedule.cli:main"
 contract-award = "loan_schedule.cli:contract_award_main"
 meter-tou = "loan_schedule.cli:meter_tou_main"
 table-keys = "loan_schedule.cli:table_keys_main"
+cdc-materialize = "loan_schedule.cli:cdc_materialize_main"
 [tool.setuptools.packages.find]
 where = ["src"]

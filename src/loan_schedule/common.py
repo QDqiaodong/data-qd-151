@@ -1,6 +1,6 @@
 """Strict local JSON contract and atomic report publication."""
 from pathlib import Path
-import hashlib, json, os, tempfile
+import hashlib, json, math, os, tempfile
 
 def require(obj,keys):
     if not isinstance(obj,dict) or set(obj)!=set(keys.split()):raise ValueError('expected object fields: '+keys)
@@ -36,6 +36,17 @@ def read(path):
         return result
     def invalid(v):raise ValueError('nonfinite JSON number: '+v)
     data=json.loads(raw,object_pairs_hook=unique,parse_constant=invalid)
+    def finite(node):
+        # ``parse_constant`` catches NaN/Infinity tokens; an overflowing literal
+        # such as 1e999 parses to float('inf'), so walk the decoded tree too.
+        if isinstance(node,float):
+            if not math.isfinite(node):raise ValueError('nonfinite JSON number')
+        elif isinstance(node,dict):
+            for value in node.values():finite(value)
+        elif isinstance(node,list):
+            for value in node:finite(value)
+        return node
+    finite(data)
     return data,hashlib.sha256(raw).hexdigest()
 
 def save(path,report):
