@@ -1,0 +1,11 @@
+{
+  "dataset_id": "duplicate-and-constant",
+  "columns": ["constant", "dup_a", "dup_b", "noise"],
+  "rows": [
+    {"row_id": "k1", "values": ["same", 10, 10, "alpha"]},
+    {"row_id": "k2", "values": ["same", 20, 20, "beta"]},
+    {"row_id": "k3", "values": ["same", 20, 20, "gamma"]},
+    {"row_id": "k4", "values": ["same", 30, 30, "delta"]},
+    {"row_id": "k5", "values": ["same", 30, 30, "delta"]}
+  ]
+}

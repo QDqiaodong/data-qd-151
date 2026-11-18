@@ -108,6 +108,22 @@ principal为1..10^12整数货币最小单位，periods=1..10000且不得超过�
 - 逐电表 × 逐当地日输出 `expected_seconds`（该日与窗口的物理秒数，自动反映 82800/90000）、`covered_seconds`、`missing_seconds` 与 `complete`/`partial`/`absent` 状态；无观测日也输出，绝不把缺口补成零电量事实。每日列出全部费率（未经者精确 0）、精确电量/费用 `{numerator,denominator}`，并在日末对精确费用只做一次非负 half-up 得 `cost_integer`；总费用为日整数费用之和，另给全窗口精确费用。
 - 输出 `schema_version:1`，含 `source_sha256`、窗口、稳定排序的片段/日/电表总计；写前核验“每区间裁剪电量=分片和、日与费率汇总=片段和、covered≤expected”，原子替换，失败退出 2 且保留旧报告；乱序输入业务结果相同、同源字节报告字节一致。样例 `fixtures/meter/`，测试 `tests/test_meter_tou.py`。
 
+## 关系表候选键画像数据集（table-keys）
+
+对严格 JSON 关系 `{dataset_id,columns,rows}`（1..24 列、0..20000 行，单元格仅允许 null/布尔/范围内整数/≤256 字符串）在**全部列子集**上求包含极小的唯一列组（候选键）与包含极大的非唯一列组，并为每个最大非键给出可回查的字典序最小碰撞行对：
+
+```sh
+.venv/bin/table-keys --source fixtures/table_keys/parity.json --output run/keys.json
+# 或
+.venv/bin/loan-schedule table-keys --source fixtures/table_keys/parity.json --output run/keys.json
+python -m loan_schedule.cli table-keys --source fixtures/table_keys/parity.json --output run/keys.json
+```
+
+- 比较按类型与值同时相等：`true`、`1`、`"1"` 互不相等，`null` 彼此相等且不同于字符串 `"null"`；字符串保留原始 Unicode 码点不归一化，`0` 与 `-0` 相等；`row_id` 只是元数据，不参与唯一性，完全重复值行保留并参与判定。
+- 最小/最大是集合包含关系而非列数；0/1 行时唯一边界为 `[[]]`；存在全列重复行时无键且最大非键仅含全列组。等价列先折叠为类，再用“行对协议掩码”穷举（内存受限时切换为增量划分 DFS，两条路径发布前互证），最小键由最大非键补集的极小击中集对偶得到，不抽样、不截断。
+- 报告含 `schema_version`、`dataset_id`、`source_sha256`、`row_count`、规范列序（Unicode 码点）、`minimal_keys`（列名数组的数组）与 `maximal_nonkeys`（每项恰含 `columns` 与 `witness=[a,b]`）；组内列名排序、边界按列数再按序列排序。写前独立核验唯一/非唯一性质、极小/极大性、互补覆盖与见证，原子替换，失败退出 2 且保留旧报告；行列置换业务结果不变，同字节输入报告字节一致。
+- 规模验收（4096 行 ×24 复制位列）输出 4096 个最小键与 12 个最大非键，单 CPU/512MiB/60 秒内完成；`python tests/tools/make_scale_fixture.py --output /tmp/scale.json` 可生成该样例。样例见 `fixtures/table_keys/`，独立全格枚举 oracle 与全部边界/见证/非法输入测试见 `tests/test_table_keys.py`。
+
 不提供计费合规认证；样例均为原创合成数据。
 
 不提供金融建议或授标合规认证；样例均为原创合成数据。

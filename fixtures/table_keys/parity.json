@@ -1,0 +1,10 @@
+{
+  "dataset_id": "parity-abc",
+  "columns": ["A", "B", "C"],
+  "rows": [
+    {"row_id": "r1", "values": [0, 0, 0]},
+    {"row_id": "r2", "values": [0, 1, 1]},
+    {"row_id": "r3", "values": [1, 0, 1]},
+    {"row_id": "r4", "values": [1, 1, 0]}
+  ]
+}

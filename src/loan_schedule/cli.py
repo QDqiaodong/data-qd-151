@@ -3,9 +3,9 @@ import argparse, json, os, sqlite3, sys, tempfile
 from pathlib import Path
 from .common import read, save
 from .model import analyze, contract
-from . import award, ledger, meter_tou, sqlstore, stress, stress_sql
+from . import award, ledger, meter_tou, sqlstore, stress, stress_sql, table_keys
 
-COMMANDS=('ledger-init','ledger-import','ledger-report','tranche-build','contract-award','meter-tou')
+COMMANDS=('ledger-init','ledger-import','ledger-report','tranche-build','contract-award','meter-tou','table-keys')
 
 
 def run(source):
@@ -149,6 +149,25 @@ def contract_award(args):
             'awarded_total_amount':report['objective']['awarded_total_amount']}
 
 
+def table_keys_report(args):
+    """Publish the auditable relational candidate-key profile."""
+    if args.output.is_symlink():
+        raise ValueError('output cannot be a symlink: '+str(args.output))
+    if args.source.resolve()==args.output.resolve():
+        raise ValueError('input and output must differ')
+    data,digest=read(args.source)
+    spec=table_keys.validate_input(data)
+    found=table_keys.discover_boundaries(spec)
+    report=table_keys.build_report(spec,digest,found)
+    table_keys.validate_result(spec,report,found['path'])
+    save(args.output,report)
+    return {'schema_version':table_keys.SCHEMA_VERSION,'command':'table-keys',
+            'output':str(args.output),'dataset_id':spec['dataset_id'],
+            'source_sha256':digest,'row_count':report['row_count'],
+            'minimal_key_count':len(report['minimal_keys']),
+            'maximal_nonkey_count':len(report['maximal_nonkeys'])}
+
+
 def ledger_parser():
     parser=argparse.ArgumentParser(description=DESCRIPTION)
     subparsers=parser.add_subparsers(dest='command',required=True)
@@ -184,6 +203,12 @@ def ledger_parser():
         description='Publish time-of-use meter energy and local-day billing.')
     meter_parser.add_argument('--source',type=Path,required=True)
     meter_parser.add_argument('--output',type=Path,required=True)
+
+    keys_parser=subparsers.add_parser(
+        'table-keys',
+        description='Publish the relational candidate-key and collision profile.')
+    keys_parser.add_argument('--source',type=Path,required=True)
+    keys_parser.add_argument('--output',type=Path,required=True)
     return parser
 
 
@@ -220,6 +245,8 @@ def main(argv=None):
                 summary=contract_award(args)
             elif args.command=='meter-tou':
                 summary=meter_tou_report(args)
+            elif args.command=='table-keys':
+                summary=table_keys_report(args)
             else:
                 raise ValueError('unknown command: '+str(args.command))
     except (ValueError,TypeError,KeyError,OSError,OverflowError,RecursionError) as error:
@@ -231,6 +258,12 @@ def meter_tou_main(argv=None):
     """Console entry point that always dispatches ``meter-tou``."""
     arguments=list(sys.argv[1:] if argv is None else argv)
     return main(['meter-tou',*arguments])
+
+
+def table_keys_main(argv=None):
+    """Console entry point that always dispatches ``table-keys``."""
+    arguments=list(sys.argv[1:] if argv is None else argv)
+    return main(['table-keys',*arguments])
 
 
 def contract_award_main(argv=None):

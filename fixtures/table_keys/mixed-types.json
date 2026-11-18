@@ -1,0 +1,11 @@
+{
+  "dataset_id": "mixed-types",
+  "columns": ["id", "flag", "code", "label", "note"],
+  "rows": [
+    {"row_id": "r01", "values": [1, true, 1, "1", null]},
+    {"row_id": "r02", "values": [2, false, 0, "0", "null"]},
+    {"row_id": "r03", "values": [3, true, null, "x", "keep unicode: 表 cliché 🔑"]},
+    {"row_id": "r04", "values": [4, false, 1, "1", "  padded  "]},
+    {"row_id": "r05", "values": [5, null, -1000000000000, "", "case and trim preserved"]}
+  ]
+}
